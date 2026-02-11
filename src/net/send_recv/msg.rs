@@ -9,7 +9,7 @@ use crate::fd::{AsFd, BorrowedFd, OwnedFd};
 use crate::io::{self, IoSlice, IoSliceMut};
 use crate::net::addr::SocketAddrArg;
 #[cfg(linux_kernel)]
-use crate::net::UCred;
+use crate::net::{IpPacketInfo, Ipv6PacketInfo, UCred};
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of, size_of_val, take, MaybeUninit};
@@ -71,6 +71,16 @@ macro_rules! cmsg_space {
             $len * ::core::mem::size_of::<::core::primitive::u64>(),
         )
     };
+    (IpPacketInfo($len:expr)) => {
+        $crate::net::__cmsg_space(
+            $len * ::core::mem::size_of::<$crate::net::IpPacketInfo>(),
+        )
+    };
+    (Ipv6PacketInfo($len:expr)) => {
+        $crate::net::__cmsg_space(
+            $len * ::core::mem::size_of::<$crate::net::Ipv6PacketInfo>(),
+        )
+    };
 
     // Combo Rules
     ($firstid:ident($firstex:expr), $($restid:ident($restex:expr)),*) => {{
@@ -102,6 +112,16 @@ macro_rules! cmsg_aligned_space {
     (TxTime($len:expr)) => {
         $crate::net::__cmsg_aligned_space(
             $len * ::core::mem::size_of::<::core::primitive::u64>(),
+        )
+    };
+    (IpPacketInfo($len:expr)) => {
+        $crate::net::__cmsg_aligned_space(
+            $len * ::core::mem::size_of::<$crate::net::IpPacketInfo>(),
+        )
+    };
+    (Ipv6PacketInfo($len:expr)) => {
+        $crate::net::__cmsg_aligned_space(
+            $len * ::core::mem::size_of::<$crate::net::Ipv6PacketInfo>(),
         )
     };
 
@@ -183,6 +203,16 @@ pub enum RecvAncillaryMessage<'a> {
     #[cfg(linux_kernel)]
     #[doc(alias = "SCM_CREDENTIALS")]
     ScmCredentials(UCred),
+    /// Received IPv4 packet info
+    #[doc(alias = "IP_PKTINFO")]
+    IpPacketInfo(IpPacketInfo),
+    /// Received IPv6 packet info
+    #[doc(alias = "IPV6_PKTINFO")]
+    Ipv6PacketInfo(Ipv6PacketInfo),
+    /// Received IPv6 hop limit
+    #[cfg(linux_kernel)]
+    #[doc(alias = "IPV6_HOPLIMIT")]
+    Ipv6HopLimit(u32),
 }
 
 /// Buffer for sending ancillary messages with [`sendmsg`] and
@@ -571,6 +601,22 @@ impl<'buf> AncillaryDrain<'buf> {
                     if payload_len >= size_of::<UCred>() {
                         let ucred = payload.as_ptr().cast::<UCred>().read_unaligned();
                         Some(RecvAncillaryMessage::ScmCredentials(ucred))
+                    } else {
+                        None
+                    }
+                }
+                (c::IPPROTO_IP, c::IP_PKTINFO) => {
+                    if payload_len >= size_of::<IpPacketInfo>() {
+                        let info = payload.as_ptr().cast::<IpPacketInfo>().read_unaligned();
+                        Some(RecvAncillaryMessage::IpPacketInfo(info))
+                    } else {
+                        None
+                    }
+                }
+                (c::IPPROTO_IPV6, c::IPV6_PKTINFO) => {
+                    if payload_len >= size_of::<Ipv6PacketInfo>() {
+                        let info = payload.as_ptr().cast::<Ipv6PacketInfo>().read_unaligned();
+                        Some(RecvAncillaryMessage::Ipv6PacketInfo(info))
                     } else {
                         None
                     }
@@ -1015,6 +1061,8 @@ mod tests {
 
             crate::cmsg_space!(ScmRights(1));
             crate::cmsg_space!(TxTime(1));
+            crate::cmsg_space!(IpPacketInfo(1));
+            crate::cmsg_space!(Ipv6PacketInfo(1));
             #[cfg(linux_kernel)]
             {
                 crate::cmsg_space!(ScmCredentials(1));

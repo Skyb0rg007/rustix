@@ -2100,6 +2100,28 @@ pub struct UCred {
     pub gid: crate::ugid::Gid,
 }
 
+/// IPv4 packet information
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[repr(C)]
+pub struct IpPacketInfo {
+    /// The send or receive interface index
+    pub ifindex: u32,
+    /// The local address of the packet
+    pub spec_dst: crate::net::IpAddr,
+    /// The destination address in the IPv4 packet header
+    pub addr: crate::net::IpAddr,
+}
+
+/// IPv6 packet information
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[repr(C)]
+pub struct Ipv6PacketInfo {
+    /// The source or destination IPv6 address
+    pub addr: crate::net::Ipv6Addr,
+    /// The send or receive interface index
+    pub ifindex: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
